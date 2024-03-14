@@ -1,31 +1,49 @@
 import logging
-from code.modules import *
+
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
+
+from modules import AttentionSelectContext, TransformerEncoder, SoftSelectPrototype
+
+
 class EntityEncoder(nn.Module):
-    def __init__(self, embed_dim, num_symbols, use_pretrain=True, embed=None, dropout_input=0.3, finetune=False,
-                 dropout_neighbors=0.0,
-                 device=torch.device("cpu")):
+    def __init__(
+        self,
+        embed_dim,
+        num_symbols,
+        use_pretrain=True,
+        embed=None,
+        dropout_input=0.3,
+        finetune=False,
+        dropout_neighbors=0.0,
+        device=torch.device("cpu"),
+    ):
         super(EntityEncoder, self).__init__()
         self.embed_dim = embed_dim
         self.pad_idx = num_symbols
-        self.symbol_emb = nn.Embedding(num_symbols + 1, embed_dim, padding_idx=self.pad_idx).cuda()
+        self.symbol_emb = nn.Embedding(
+            num_symbols + 1, embed_dim, padding_idx=self.pad_idx
+        ).cuda()
         self.num_symbols = num_symbols
 
         self.gcn_w = nn.Linear(2 * self.embed_dim, self.embed_dim).cuda()
         self.gcn_b = nn.Parameter(torch.FloatTensor(self.embed_dim)).cuda()
         self.dropout = nn.Dropout(dropout_input)
-        init.xavier_normal_(self.gcn_w.weight)
-        init.constant_(self.gcn_b, 0)
+        nn.init.xavier_normal_(self.gcn_w.weight)
+        nn.init.constant_(self.gcn_b, 0)
         self.pad_tensor = torch.tensor([self.pad_idx], requires_grad=False).cuda()
 
         if use_pretrain:
-            logging.info('LOADING KB EMBEDDINGS')
+            logging.info("LOADING KB EMBEDDINGS")
             self.symbol_emb.weight.data.copy_(torch.from_numpy(embed))
             if not finetune:
-                logging.info('FIX KB EMBEDDING')
+                logging.info("FIX KB EMBEDDING")
                 self.symbol_emb.weight.requires_grad = False
 
-        self.NeighborAggregator = AttentionSelectContext(dim=embed_dim, dropout=dropout_neighbors)
+        self.NeighborAggregator = AttentionSelectContext(
+            dim=embed_dim, dropout=dropout_neighbors
+        )
 
     def neighbor_encoder_mean(self, connections, num_neighbors):
         """
@@ -45,15 +63,19 @@ class EntityEncoder(nn.Module):
         out = out / num_neighbors
         return out.tanh()
 
-    def neighbor_encoder_soft_select(self, connections_left, connections_right, head_left, head_right):
+    def neighbor_encoder_soft_select(
+        self, connections_left, connections_right, head_left, head_right
+    ):
         relations_left = connections_left[:, :, 0].squeeze(-1)
         entities_left = connections_left[:, :, 1].squeeze(-1)
-        rel_embeds_left = self.symbol_emb(relations_left) # [b, max, dim]
+        rel_embeds_left = self.symbol_emb(relations_left)  # [b, max, dim]
         ent_embeds_left = self.symbol_emb(entities_left)
 
         pad_matrix_left = self.pad_tensor.expand_as(relations_left)
         #
-        mask_matrix_left = torch.eq(relations_left, pad_matrix_left).squeeze(-1)  # [b, max]
+        mask_matrix_left = torch.eq(relations_left, pad_matrix_left).squeeze(
+            -1
+        )  # [b, max]
 
         relations_right = connections_right[:, :, 0].squeeze(-1)
         entities_right = connections_right[:, :, 1].squeeze(-1)
@@ -61,29 +83,41 @@ class EntityEncoder(nn.Module):
         ent_embeds_right = self.symbol_emb(entities_right)
 
         pad_matrix_right = self.pad_tensor.expand_as(relations_right)
-        mask_matrix_right = torch.eq(relations_right, pad_matrix_right).squeeze(-1)  # [b, max]
+        mask_matrix_right = torch.eq(relations_right, pad_matrix_right).squeeze(
+            -1
+        )  # [b, max]
         left = [head_left, rel_embeds_left, ent_embeds_left]
         right = [head_right, rel_embeds_right, ent_embeds_right]
-        output = self.NeighborAggregator(left, right, mask_matrix_left, mask_matrix_right)
+        output = self.NeighborAggregator(
+            left, right, mask_matrix_left, mask_matrix_right
+        )
         return output
 
     def forward(self, entity, entity_meta=None):
-        '''
-         query: (batch_size, 2)
-         entity: (few, 2)
-         return: (batch_size, )
-         '''
+        """
+        query: (batch_size, 2)
+        entity: (few, 2)
+        return: (batch_size, )
+        """
         if entity_meta is not None:
             entity = self.symbol_emb(entity)
-            entity_left_connections, entity_left_degrees, entity_right_connections, entity_right_degrees = entity_meta
+            (
+                entity_left_connections,
+                entity_left_degrees,
+                entity_right_connections,
+                entity_right_degrees,
+            ) = entity_meta
 
             entity_left, entity_right = torch.split(entity, 1, dim=1)
             entity_left = entity_left.squeeze(1)
             entity_right = entity_right.squeeze(1)
 
-            entity_left, entity_right = self.neighbor_encoder_soft_select(entity_left_connections,
-                                                                          entity_right_connections,
-                                                                          entity_left, entity_right)
+            entity_left, entity_right = self.neighbor_encoder_soft_select(
+                entity_left_connections,
+                entity_right_connections,
+                entity_left,
+                entity_right,
+            )
         else:
             # no_meta
             entity = self.symbol_emb(entity)
@@ -94,17 +128,26 @@ class EntityEncoder(nn.Module):
 
 
 class RelationRepresentation(nn.Module):
-    def __init__(self, emb_dim, num_transformer_layers, num_transformer_heads, dropout_rate=0.1):
+    def __init__(
+        self, emb_dim, num_transformer_layers, num_transformer_heads, dropout_rate=0.1
+    ):
         super(RelationRepresentation, self).__init__()
-        self.RelationEncoder = TransformerEncoder(model_dim=emb_dim, ffn_dim=emb_dim * num_transformer_heads * 2,
-                                                  num_heads=num_transformer_heads, dropout=dropout_rate,
-                                                  num_layers=num_transformer_layers, max_seq_len=4,
-                                                  with_pos=True)
+        self.RelationEncoder = TransformerEncoder(
+            model_dim=emb_dim,
+            ffn_dim=emb_dim * num_transformer_heads * 2,
+            num_heads=num_transformer_heads,
+            dropout=dropout_rate,
+            num_layers=num_transformer_layers,
+            max_seq_len=4,
+            with_pos=True,
+        )
 
     def forward(self, left, right):
         relation = self.RelationEncoder(left, right)
         # relation = self.RelationEncoder(left, right, tem)
         return relation
+
+
 class TimeEncoder(nn.Module):
     def __init__(self, embed_dim, tem_total):
         super(TimeEncoder, self).__init__()
@@ -124,25 +167,50 @@ class TimeEncoder(nn.Module):
 
 
 class Matcher(nn.Module):
-    def __init__(self, embed_dim, num_symbols, use_pretrain=True, embed=None, dropout_layers=0.1, dropout_input=0.3,
-                 dropout_neighbors=0.0,
-                 finetune=False, num_transformer_layers=6, num_transformer_heads=4,
-                 device=torch.device("cpu")
-                 ):
+    def __init__(
+        self,
+        embed_dim,
+        num_symbols,
+        use_pretrain=True,
+        embed=None,
+        dropout_layers=0.1,
+        dropout_input=0.3,
+        dropout_neighbors=0.0,
+        finetune=False,
+        num_transformer_layers=6,
+        num_transformer_heads=4,
+        device=torch.device("cpu"),
+    ):
         super(Matcher, self).__init__()
-        self.EntityEncoder = EntityEncoder(embed_dim, num_symbols,
-                                           use_pretrain=use_pretrain,
-                                           embed=embed, dropout_input=dropout_input,
-                                           dropout_neighbors=dropout_neighbors,
-                                           finetune=finetune, device=device)
-        self.RelationRepresentation = RelationRepresentation(emb_dim=embed_dim,
-                                                             num_transformer_layers=num_transformer_layers,
-                                                             num_transformer_heads=num_transformer_heads,
-                                                             dropout_rate=dropout_layers)
+        self.EntityEncoder = EntityEncoder(
+            embed_dim,
+            num_symbols,
+            use_pretrain=use_pretrain,
+            embed=embed,
+            dropout_input=dropout_input,
+            dropout_neighbors=dropout_neighbors,
+            finetune=finetune,
+            device=device,
+        )
+        self.RelationRepresentation = RelationRepresentation(
+            emb_dim=embed_dim,
+            num_transformer_layers=num_transformer_layers,
+            num_transformer_heads=num_transformer_heads,
+            dropout_rate=dropout_layers,
+        )
         self.Prototype = SoftSelectPrototype(embed_dim * num_transformer_heads)
         self.TimeEncoder = TimeEncoder(embed_dim, 304)
 
-    def forward(self, support, query, false=None, isEval=False, support_meta=None, query_meta=None, false_meta=None):
+    def forward(
+        self,
+        support,
+        query,
+        false=None,
+        isEval=False,
+        support_meta=None,
+        query_meta=None,
+        false_meta=None,
+    ):
         if not isEval:
             support_r = self.EntityEncoder(support, support_meta)
             query_r = self.EntityEncoder(query, query_meta)

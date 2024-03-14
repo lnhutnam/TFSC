@@ -4,14 +4,14 @@ import logging
 
 
 def with_k(ent):
-    return ent.find('(') != -1
+    return ent.find("(") != -1
 
 
 def train_generate(dataset, batch_size, few, symbol2id, ent2id, e1rel_e2):
-    logging.info('Loading Train Data')
-    train_tasks = json.load(open(dataset + '/train_tasks.json'))
-    logging.info('Loading Candidates')
-    rel2candidates = json.load(open(dataset + '/rel2candidates_all_ent.json'))
+    logging.info("Loading Train Data")
+    train_tasks = json.load(open(dataset + "/train_tasks.json"))
+    logging.info("Loading Candidates")
+    rel2candidates = json.load(open(dataset + "/rel2candidates_all_ent.json"))
     task_pool = list(train_tasks.keys())
     num_tasks = len(task_pool)
 
@@ -21,7 +21,7 @@ def train_generate(dataset, batch_size, few, symbol2id, ent2id, e1rel_e2):
             random.shuffle(task_pool)  # shuffle task order
         task_choice = task_pool[rel_idx % num_tasks]  # choose a rel task
         rel_idx += 1
-        candidates = rel2candidates['0']
+        candidates = rel2candidates["0"]
 
         if len(candidates) <= 20:
             continue
@@ -29,7 +29,9 @@ def train_generate(dataset, batch_size, few, symbol2id, ent2id, e1rel_e2):
         random.shuffle(task_triples)
         # select support set, len = few
         support_triples = task_triples[:few]
-        support_pairs = [[symbol2id[triple[0]], symbol2id[triple[2]]] for triple in support_triples]
+        support_pairs = [
+            [symbol2id[triple[0]], symbol2id[triple[2]]] for triple in support_triples
+        ]
         support_left = [ent2id[triple[0]] for triple in support_triples]
         support_right = [ent2id[triple[2]] for triple in support_triples]
         other_triples = task_triples[few:]
@@ -40,7 +42,9 @@ def train_generate(dataset, batch_size, few, symbol2id, ent2id, e1rel_e2):
         else:
             query_triples = random.sample(other_triples, batch_size)
 
-        query_pairs = [[symbol2id[triple[0]], symbol2id[triple[2]]] for triple in query_triples]
+        query_pairs = [
+            [symbol2id[triple[0]], symbol2id[triple[2]]] for triple in query_triples
+        ]
         query_left = [ent2id[triple[0]] for triple in query_triples]
         query_right = [ent2id[triple[2]] for triple in query_triples]
         false_pairs = []
@@ -52,8 +56,7 @@ def train_generate(dataset, batch_size, few, symbol2id, ent2id, e1rel_e2):
             e_t = triple[2]
             while True:
                 noise = random.choice(candidates)  # select noise from candidates
-                if (noise not in e1rel_e2[e_h + rel]) \
-                        and noise != e_t:
+                if (noise not in e1rel_e2[e_h + rel]) and noise != e_t:
                     break
             false_pairs.append([symbol2id[e_h], symbol2id[noise]])
             false_left.append(ent2id[e_h])
