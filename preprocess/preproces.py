@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import os
 from collections import defaultdict
@@ -18,8 +19,9 @@ from torch.autograd import Variable
 from tqdm import tqdm
 import random
 
+
 def load_quadruples(inPath, fileName, fileName2=None):
-    with open(os.path.join(inPath, fileName), 'r') as fr:
+    with open(os.path.join(inPath, fileName), "r") as fr:
         quadrupleList = []
         times = set()
         for line in fr:
@@ -32,7 +34,7 @@ def load_quadruples(inPath, fileName, fileName2=None):
             times.add(time)
 
     if fileName2 is not None:
-        with open(os.path.join(inPath, fileName2), 'r') as fr:
+        with open(os.path.join(inPath, fileName2), "r") as fr:
             for line in fr:
                 line_split = line.split()
                 head = int(line_split[0])
@@ -48,14 +50,14 @@ def load_quadruples(inPath, fileName, fileName2=None):
 
 
 def get_total_number(inPath, fileName):
-    with open(os.path.join(inPath, fileName), 'r') as fr:
+    with open(os.path.join(inPath, fileName), "r") as fr:
         for line in fr:
             line_split = line.split()
             return int(line_split[0]), int(line_split[1])
 
 
 def load_quadruples(inPath, fileName, fileName2=None):
-    with open(os.path.join(inPath, fileName), 'r') as fr:
+    with open(os.path.join(inPath, fileName), "r") as fr:
         quadrupleList = []
         times = set()
         for line in fr:
@@ -67,7 +69,7 @@ def load_quadruples(inPath, fileName, fileName2=None):
             quadrupleList.append([head, rel, tail, time])
             times.add(time)
     if fileName2 is not None:
-        with open(os.path.join(inPath, fileName2), 'r') as fr:
+        with open(os.path.join(inPath, fileName2), "r") as fr:
             for line in fr:
                 line_split = line.split()
                 head = int(line_split[0])
@@ -105,9 +107,11 @@ def get_big_graph(data, num_rels):
     rel_s = np.concatenate((rel, rel + num_rels))
     g.add_edges(src, dst)
     norm = comp_deg_norm(g)
-    g.ndata.update({'id': torch.from_numpy(uniq_v).long().view(-1, 1), 'norm': norm.view(-1, 1)})
-    g.edata['type_s'] = torch.LongTensor(rel_s)
-    g.edata['type_o'] = torch.LongTensor(rel_o)
+    g.ndata.update(
+        {"id": torch.from_numpy(uniq_v).long().view(-1, 1), "norm": norm.view(-1, 1)}
+    )
+    g.edata["type_s"] = torch.LongTensor(rel_s)
+    g.edata["type_o"] = torch.LongTensor(rel_o)
     g.ids = {}
     idx = 0
     for id in uniq_v:
@@ -121,19 +125,19 @@ def id_json():
     # ents = set()
     rels = []
     ents = []
-    with open('entity2id.txt', encoding='UTF-8') as fr:
+    with open(args.datasets + "entity2id.txt", encoding="UTF-8") as fr:
         for line in fr:
             line = line.rstrip()
-            ent = line.split('\t')[0]
-            ent_id = int(line.split('\t')[1])
+            ent = line.split("\t")[0]
+            ent_id = int(line.split("\t")[1])
             # ents.add(ent)
             ents.append(ent)
 
-    with open('relation2id.txt', encoding='UTF-8') as fr:
+    with open(args.datasets + "relation2id.txt", encoding="UTF-8") as fr:
         for line in fr:
             line = line.rstrip()
-            rel = line.split('\t')[0]
-            rel_id = int(line.split('\t')[1])
+            rel = line.split("\t")[0]
+            rel_id = int(line.split("\t")[1])
             # rels.add(rel)
             rels.append(rel)
 
@@ -145,47 +149,48 @@ def id_json():
     for idx, item in enumerate(ents):
         entid[item] = idx
 
-    json.dump(relationid, open('relation2ids', 'w'))
-    json.dump(entid, open('ent2ids', 'w'))
+    json.dump(relationid, open(args.datasets + "relation2ids", "w"))
+    json.dump(entid, open(args.datasets + "ent2ids", "w"))
+
 
 def all_rels2json():
-    quadruple =[]
+    quadruple = []
     rel2quadruple = defaultdict(list)
 
+    with open(args.datasets + "train.txt", encoding="UTF-8") as fr:
+        for line in fr:
+            line = line.rstrip()
+            head_id = int(line.split("\t")[0])
+            rel_id = int(line.split("\t")[1])
+            tail_id = int(line.split("\t")[2])
+            time_id = int(line.split("\t")[3])
+            quadruple = [head_id, rel_id, tail_id, time_id]
+            rel2quadruple[rel_id].append(quadruple)
+    with open(args.datasets + "valid.txt", encoding="UTF-8") as fr:
+        for line in fr:
+            line = line.rstrip()
+            head_id = int(line.split("\t")[0])
+            rel_id = int(line.split("\t")[1])
+            tail_id = int(line.split("\t")[2])
+            time_id = int(line.split("\t")[3])
+            quadruple = [head_id, rel_id, tail_id, time_id]
+            rel2quadruple[rel_id].append(quadruple)
+    with open(args.datasets + "test.txt", encoding="UTF-8") as fr:
+        for line in fr:
+            line = line.rstrip()
+            head_id = int(line.split("\t")[0])
+            rel_id = int(line.split("\t")[1])
+            tail_id = int(line.split("\t")[2])
+            time_id = int(line.split("\t")[3])
+            quadruple = [head_id, rel_id, tail_id, time_id]
+            rel2quadruple[rel_id].append(quadruple)
 
-    with open('train.txt', encoding='UTF-8') as fr:
-        for line in fr:
-            line = line.rstrip()
-            head_id = int(line.split('\t')[0])
-            rel_id = int(line.split('\t')[1])
-            tail_id = int(line.split('\t')[2])
-            time_id = int(line.split('\t')[3])
-            quadruple = [head_id, rel_id, tail_id, time_id]
-            rel2quadruple[rel_id].append(quadruple)
-    with open('valid.txt', encoding='UTF-8') as fr:
-        for line in fr:
-            line = line.rstrip()
-            head_id = int(line.split('\t')[0])
-            rel_id = int(line.split('\t')[1])
-            tail_id = int(line.split('\t')[2])
-            time_id = int(line.split('\t')[3])
-            quadruple = [head_id, rel_id, tail_id, time_id]
-            rel2quadruple[rel_id].append(quadruple)
-    with open('test.txt', encoding='UTF-8') as fr:
-        for line in fr:
-            line = line.rstrip()
-            head_id = int(line.split('\t')[0])
-            rel_id = int(line.split('\t')[1])
-            tail_id = int(line.split('\t')[2])
-            time_id = int(line.split('\t')[3])
-            quadruple = [head_id, rel_id, tail_id, time_id]
-            rel2quadruple[rel_id].append(quadruple)
+    json.dump(rel2quadruple, open(args.datasets + "./all_rels.json", "w"))
 
-    json.dump(rel2quadruple, open('./all_rels.json', 'w'))
 
 def id2symbol():
-    ent2id = json.load(open('./ent2ids'))
-    rel2id = json.load(open('./relation2ids'))
+    ent2id = json.load(open(args.datasets + "./ent2ids"))
+    rel2id = json.load(open(args.datasets + "./relation2ids"))
     id2ent = {}
     id2rel = {}
 
@@ -195,26 +200,32 @@ def id2symbol():
     for key in rel2id.keys():
         id2rel[rel2id[key]] = key
 
-    json.dump(id2ent, open('./id2ent.json', 'w'))
-    json.dump(id2rel, open('./id2rel.json', 'w'))
+    json.dump(id2ent, open(args.datasets + "./id2ent.json", "w"))
+    json.dump(id2rel, open(args.datasets + "./id2rel.json", "w"))
+
 
 def for_filtering():
     e1rel_e2 = defaultdict(list)
-    train_tasks = json.load(open('./train_task.json'))
-    dev_tasks = json.load(open('./dev_task.json'))
-    test_tasks = json.load(open('./test_task.json'))
+    train_tasks = json.load(open(args.datasets + "./train_task.json"))
+    dev_tasks = json.load(open(args.datasets + "./dev_task.json"))
+    test_tasks = json.load(open(args.datasets + "./test_task.json"))
     few_quadruple = []
     # for _ in (train_tasks.values() + dev_tasks.values() + test_tasks.values()):
-    for _ in (list(train_tasks.values()) + list(dev_tasks.values()) + list(test_tasks.values())):
+    for _ in (
+        list(train_tasks.values())
+        + list(dev_tasks.values())
+        + list(test_tasks.values())
+    ):
         few_quadruple += _
     for quadruple in few_quadruple:
-        e1,rel,e2,t = quadruple
-        e1rel_e2[e1+rel].append(e2)
+        e1, rel, e2, t = quadruple
+        e1rel_e2[e1 + rel].append(e2)
 
-    json.dump(e1rel_e2, open('./e1rel_e2.json', 'w'))
+    json.dump(e1rel_e2, open(args.datasets + "./e1rel_e2.json", "w"))
+
 
 def shuffle_ent2ids():
-    ent2id = json.load(open('./ent2ids'))
+    ent2id = json.load(open(args.datasets + "./ent2ids"))
 
     dict_key_ls = list(ent2id.keys())
     random.shuffle(dict_key_ls)
@@ -224,16 +235,17 @@ def shuffle_ent2ids():
         new_dic[key] = i
         i += 1
     print(i)
-    json.dump(new_dic, open('./ent2ids_shuffle', 'w'))
+    json.dump(new_dic, open(args.datasets + "./ent2ids_shuffle", "w"))
+
 
 def shuffle_rel2ids():
-    rel2id = json.load(open('./relation2ids'))
+    rel2id = json.load(open(args.datasets + "./relation2ids"))
 
     dict_key_ls = list(rel2id.keys())
     with_inv = []
     for i in dict_key_ls:
         with_inv.append(i)
-        with_inv.append(i+'_inv')
+        with_inv.append(i + "_inv")
 
     random.shuffle(with_inv)
     new_dic = {}
@@ -242,12 +254,18 @@ def shuffle_rel2ids():
         new_dic[key] = i
         i += 1
     print(i)
-    json.dump(new_dic, open('./rel2ids_shuffle', 'w'))
+    json.dump(new_dic, open(args.datasets + "./rel2ids_shuffle", "w"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--datasets", type=str, default="../datasets/icews14/")
+    args = parser.parse_args()
+    print(args)
     id_json()
     all_rels2json()
     id2symbol()
+    shuffle_ent2ids()
+    shuffle_rel2ids()
     # for_filtering()
     # pass
